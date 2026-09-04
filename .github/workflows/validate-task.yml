@@ -1,0 +1,147 @@
+name: Validate Task
+
+on:
+  pull_request:
+    paths:
+      - "tasks/**"
+      - "ci_checks/**"
+      - ".github/workflows/validate-task.yml"
+      - "README.md"
+
+jobs:
+  detect-tasks:
+    runs-on: ubuntu-latest
+    outputs:
+      tasks: ${{ steps.detect.outputs.tasks }}
+      has_tasks: ${{ steps.detect.outputs.has_tasks }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect modified tasks
+        id: detect
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags --depth=1 origin "$BASE_SHA" "$HEAD_SHA" || true
+
+          CHANGED_FILES="$(git diff --name-only "$BASE_SHA" "$HEAD_SHA" || true)"
+          TASKS="$(printf '%s\n' "$CHANGED_FILES" \
+            | { grep -E '^tasks/[^/]+/' || true; } \
+            | cut -d/ -f1-2 \
+            | sort -u \
+            | jq -R -s -c 'split("\n") | map(select(length > 0))')"
+
+          if [ "$TASKS" = "[]" ]; then
+            TASKS="$(find tasks -mindepth 1 -maxdepth 1 -type d \
+              | sort \
+              | jq -R -s -c 'split("\n") | map(select(length > 0))')"
+          fi
+
+          echo "tasks=$TASKS" >> "$GITHUB_OUTPUT"
+          if [ "$TASKS" = "[]" ]; then
+            echo "has_tasks=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_tasks=true" >> "$GITHUB_OUTPUT"
+          fi
+          echo "Detected tasks: $TASKS"
+
+  execution-checks:
+    needs: detect-tasks
+    if: needs.detect-tasks.outputs.has_tasks == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        task: ${{ fromJson(needs.detect-tasks.outputs.tasks) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Install Harbor
+        run: uv tool install harbor==0.14.0
+
+      - name: Install Python dependencies
+        run: uv pip install --system scikit-learn==1.6.1
+
+      - name: Similarity check
+        env:
+          TASK_PATH: ${{ matrix.task }}
+        run: |
+          python3 ci_checks/check-similarity.py "$TASK_PATH"
+
+      - name: Build Docker environment
+        env:
+          TASK_PATH: ${{ matrix.task }}
+        run: |
+          set -euo pipefail
+          safe_tag="$(echo "$TASK_PATH" | tr '/' '-')"
+          docker build -t "task-env-${safe_tag}" "$TASK_PATH/environment"
+
+      - name: Oracle and nop validation
+        env:
+          TASK_PATH: ${{ matrix.task }}
+        run: |
+          set -euo pipefail
+
+          reward_for() {
+            local job_dir="$1"
+            local f
+            f="$(find "$job_dir" -path '*/verifier/reward.txt' -print -quit)"
+            if [ -z "$f" ]; then echo "missing"; else tr -d '[:space:]' < "$f"; fi
+          }
+
+          # Oracle (reference solution) must score 1.0
+          harbor run --jobs-dir jobs --job-name oracle-run -p "$TASK_PATH" -a oracle
+          oracle="$(reward_for jobs/oracle-run)"
+          echo "oracle reward: $oracle"
+          if [ "$oracle" != "1" ] && [ "$oracle" != "1.0" ]; then
+            echo "::error::oracle expected reward 1.0, got $oracle"
+            exit 1
+          fi
+
+          # Nop (does nothing) must score < 1.0, confirming the verifier isn't a no-op
+          harbor run --jobs-dir jobs --job-name nop-run -p "$TASK_PATH" -a nop
+          nop="$(reward_for jobs/nop-run)"
+          echo "nop reward: $nop"
+          if [ "$nop" = "1" ] || [ "$nop" = "1.0" ]; then
+            echo "::error::nop unexpectedly scored 1.0 — verifier may be a no-op"
+            exit 1
+          fi
+
+  validate-summary:
+    # Stable-named aggregate gate over the dynamically-named
+    # `execution-checks (tasks/<name>)` matrix legs. Branch protection can only
+    # require fixed context names, so this single job is the required check that
+    # stays red unless EVERY task validated. `if: always()` is mandatory — a
+    # failed/skipped dependency would otherwise SKIP this job, and a skipped
+    # *required* check blocks the PR indefinitely.
+    needs: [detect-tasks, execution-checks]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require a task and all execution-checks to pass
+        env:
+          HAS_TASKS: ${{ needs.detect-tasks.outputs.has_tasks }}
+          EXECUTION_RESULT: ${{ needs.execution-checks.result }}
+        run: |
+          set -euo pipefail
+          if [ "$HAS_TASKS" != "true" ]; then
+            echo "::error::no task detected under tasks/ — a submission must add a task directory"
+            exit 1
+          fi
+          if [ "$EXECUTION_RESULT" != "success" ]; then
+            echo "::error::execution-checks did not succeed (result: $EXECUTION_RESULT)"
+            exit 1
+          fi
+          echo "All task validations passed."

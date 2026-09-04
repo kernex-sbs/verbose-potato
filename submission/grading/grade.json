@@ -1,0 +1,16 @@
+{
+  "job": "evaluation-provenance-final-5-current",
+  "task": "evaluation-provenance",
+  "pass_rate": {
+    "passed": 2,
+    "total": 5,
+    "pct": 40,
+    "band": "great"
+  },
+  "oracle": "1",
+  "nop": "0",
+  "rubric": {
+    "failed": 0,
+    "total": 30
+  }
+}

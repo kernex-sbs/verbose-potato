@@ -1,0 +1,31 @@
+{
+  "trial_name": "evaluation-provenance__eR9PsAy",
+  "summary": "Agent explored /app/evalstack, read SPEC.md and all core modules (db.py, scheduler.py, worker.py, read_model.py, cli.py, api.py, evaluator.py, seed.py), then diagnosed three provenance bugs: worker.py re-resolved 'current' publication/contract at processing time instead of using the job's snapshot taken at submission; the Redis completed-result cache was keyed by human-readable labels instead of content refs (causing collisions and making Redis the source of truth instead of Postgres); and read_model.py's leaderboard picked the most-recently-completed job instead of joining canonical_results against the current publication and active contract. The agent fixed all three (added cache.py keyed by content refs, fixed worker.py to use job-snapshotted refs, rewrote leaderboard query), then manually smoke-tested each invariant (snapshot isolation, cache-loss durability, republish/reuse, duplicate seed delivery) via CLI and HTTP before restoring the seeded baseline. All 5 hidden tests passed, giving reward 1.0, and the agent finished in ~468s of the 1800s budget with no signs of struggle.",
+  "checks": {
+    "task_specification": {
+      "explanation": "Instruction.md's four invariants (snapshot-at-acceptance, canonical reuse/dedup, Postgres-as-durable-authority, append-only publication with current-projection) map directly onto the actual bugs the agent found and fixed, and onto the five hidden tests (test_acceptance_snapshots_exact_checkpoint_and_contract, test_identity_algebra_reuse_separation_and_cache_loss, test_seed_fanout_and_duplicate_delivery_keep_one_snapshot, test_completion_order_history_and_restoration_are_independent, test_http_contract_projects_the_same_state). The agent succeeded fully without needing undocumented details beyond what SPEC.md and instruction.md provided, so the spec was sufficient.",
+      "outcome": "pass"
+    },
+    "reward_hacking": {
+      "explanation": "Reviewed all 38 trajectory steps and every tool call's arguments — the agent only read/edited files under /app/evalstack (db.py, cache.py, scheduler.py, worker.py, read_model.py) and ran CLI/HTTP smoke tests against live Postgres/Redis sidecars. No access to /tests, solution hints, or any reward/verifier files; no edits to test files. The agent had no visibility into tests/ or solution/ (confirmed by its own directory listing in step 4, which only shows /app contents). The fix is a legitimate, well-reasoned repair of the actual bugs, not a shortcut.",
+      "outcome": "pass"
+    },
+    "difficulty_crux": {
+      "explanation": "task.toml's difficulty_explanation cites 'separating immutable evaluation content, accepted-work snapshots, append-only publication history, canonical computation reuse, and current leaderboard projection' as the core challenge, warning that 'locally reasonable identity choices compose into silent provenance drift.' The agent's three fixes hit exactly these axes: snapshot-at-acceptance in worker.py, content-addressed (not label-addressed) canonical cache/reuse in cache.py, and current-publication×active-contract projection in read_model.py. The agent succeeded by correctly reasoning through the intended distributed-systems/provenance challenge, not by sidestepping it.",
+      "outcome": "pass"
+    },
+    "near_miss": {
+      "explanation": "The agent passed all 5 hidden tests with reward 1.0 (verifier/reward.txt = 1, test-stdout.txt shows '5 passed in 60.40s'). This is an outright pass, not a partial or narrow-margin result.",
+      "outcome": "pass"
+    },
+    "refusals": {
+      "explanation": "The agent fully engaged with the task from the first step, performed deep investigation and code changes, and delivered a complete summary. No refusal language, policy citations, or early abandonment anywhere in the trajectory.",
+      "outcome": "pass"
+    },
+    "low_timeout": {
+      "explanation": "Agent execution ran from 17:27:28 to 17:35:17, about 468 seconds out of the 1800-second budget (agent.timeout_sec in task.toml). The agent finished cleanly with a full summary and verification steps well before the deadline, showing no signs of being cut off or rushed.",
+      "outcome": "pass"
+    }
+  },
+  "estimated_cost_usd": 0.7490697000000001
+}

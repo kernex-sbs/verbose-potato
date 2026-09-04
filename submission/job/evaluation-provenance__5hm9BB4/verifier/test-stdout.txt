@@ -1,0 +1,49 @@
+============================= test session starts ==============================
+platform linux -- Python 3.13.14, pytest-8.3.4, pluggy-1.6.0
+rootdir: /tests
+collected 5 items
+
+../tests/test_state.py .F...                                             [100%]
+
+=================================== FAILURES ===================================
+____________ test_identity_algebra_reuse_separation_and_cache_loss _____________
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-0/test_identity_algebra_reuse_se0')
+
+    def test_identity_algebra_reuse_separation_and_cache_loss(tmp_path: Path) -> None:
+        """Exact contents define reuse, including metadata-only content changes."""
+        reset()
+        cp_a, cp_b = checkpoint(1), checkpoint(2)
+        ct_a, ct_b = contract(1), contract(2)
+        cp_a_path = write_json(tmp_path, "a.json", cp_a)
+        cp_b_path = write_json(tmp_path, "b.json", cp_b)
+        ct_a_path = write_json(tmp_path, "v1.json", ct_a)
+        ct_b_path = write_json(tmp_path, "v2.json", ct_b)
+    
+        publish("atlas", cp_a_path)
+        activate(ct_a_path)
+        first = submit("atlas")
+        drain()
+        calls_after_first = cli("metrics")["evaluator_invocations"]
+        assert calls_after_first == len(ct_a["seeds"])
+        cli("clear-result-cache")
+        board_after_cache_loss = cli("leaderboard")
+        assert board_after_cache_loss["entries"][0]["status"] == "complete"
+        assert board_after_cache_loss["entries"][0]["score"] == total_score(cp_a, ct_a)
+    
+        same = submit("atlas")
+>       assert same["status"] == "complete" and same["reused"] is True
+E       AssertionError: assert ('queued' == 'complete'
+E         
+E         - complete
+E         + queued)
+
+/tests/test_state.py:226: AssertionError
+==================================== PASSES ====================================
+=========================== short test summary info ============================
+PASSED ../tests/test_state.py::test_acceptance_snapshots_exact_checkpoint_and_contract
+PASSED ../tests/test_state.py::test_seed_fanout_and_duplicate_delivery_keep_one_snapshot
+PASSED ../tests/test_state.py::test_completion_order_history_and_restoration_are_independent
+PASSED ../tests/test_state.py::test_http_contract_projects_the_same_state
+FAILED ../tests/test_state.py::test_identity_algebra_reuse_separation_and_cache_loss
+========================= 1 failed, 4 passed in 43.58s =========================

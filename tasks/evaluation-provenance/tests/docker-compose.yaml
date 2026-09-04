@@ -1,0 +1,43 @@
+services:
+  main:
+    environment:
+      EVALSTACK_DATABASE_URL: postgresql://evalstack:evalstack@postgres:5432/evalstack
+      EVALSTACK_REDIS_URL: redis://redis:6379/0
+      PYTHONPATH: /app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks: [verifier]
+
+  postgres:
+    image: postgres:16.4-bookworm
+    environment:
+      POSTGRES_DB: evalstack
+      POSTGRES_USER: evalstack
+      POSTGRES_PASSWORD: evalstack
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U evalstack -d evalstack"]
+      interval: 1s
+      timeout: 3s
+      retries: 30
+    networks: [verifier]
+
+  redis:
+    image: redis:7.4.1-bookworm
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    tmpfs:
+      - /data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 1s
+      timeout: 3s
+      retries: 30
+    networks: [verifier]
+
+networks:
+  verifier:
+    internal: true

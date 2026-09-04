@@ -1,0 +1,7 @@
+jobs/
+trials/
+.harbor/
+__pycache__/
+.env
+.env.local
+/plan/

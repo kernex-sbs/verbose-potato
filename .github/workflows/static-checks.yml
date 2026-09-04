@@ -1,0 +1,35 @@
+name: Static Checks
+
+on:
+  pull_request:
+    paths:
+      - "tasks/**"
+      - "ci_checks/**"
+      - ".github/workflows/static-checks.yml"
+
+jobs:
+  static-checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Run static checks for each task
+        run: |
+          set -euo pipefail
+          rc=0
+          for task in tasks/*; do
+            if [ -d "$task" ]; then
+              for check in ci_checks/check-*.sh; do
+                if ! bash "$check" "$task"; then
+                  echo "::error::$(basename "$check") failed on $task"
+                  rc=1
+                fi
+              done
+            fi
+          done
+          exit $rc

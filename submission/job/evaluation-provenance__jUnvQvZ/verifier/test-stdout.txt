@@ -1,0 +1,15 @@
+============================= test session starts ==============================
+platform linux -- Python 3.13.14, pytest-8.3.4, pluggy-1.6.0
+rootdir: /tests
+collected 5 items
+
+../tests/test_state.py .....                                             [100%]
+
+==================================== PASSES ====================================
+=========================== short test summary info ============================
+PASSED ../tests/test_state.py::test_acceptance_snapshots_exact_checkpoint_and_contract
+PASSED ../tests/test_state.py::test_identity_algebra_reuse_separation_and_cache_loss
+PASSED ../tests/test_state.py::test_seed_fanout_and_duplicate_delivery_keep_one_snapshot
+PASSED ../tests/test_state.py::test_completion_order_history_and_restoration_are_independent
+PASSED ../tests/test_state.py::test_http_contract_projects_the_same_state
+========================= 5 passed in 60.84s (0:01:00) =========================

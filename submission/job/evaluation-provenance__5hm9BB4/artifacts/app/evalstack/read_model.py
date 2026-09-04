@@ -1,0 +1,126 @@
+"""Inspection, metrics, and leaderboard projection."""
+
+from __future__ import annotations
+
+from typing import Any
+
+from .config import RESULT_CACHE_PREFIX
+from .db import active_contract, connection, redis_client
+
+
+def clear_result_cache() -> dict[str, int]:
+    client = redis_client()
+    keys = list(client.scan_iter(match=f"{RESULT_CACHE_PREFIX}*"))
+    deleted = int(client.delete(*keys)) if keys else 0
+    return {"deleted": deleted}
+
+
+def leaderboard() -> dict[str, Any]:
+    """Project each candidate's current publication under the active
+    contract directly from content-addressed canonical results, independent
+    of which job (if any) happened to complete it or in what order."""
+    with connection() as conn:
+        active = active_contract(conn)
+        publications = conn.execute(
+            """
+            SELECT DISTINCT ON (candidate_id)
+                   candidate_id, publication_id, checkpoint_content_ref
+            FROM publications
+            ORDER BY candidate_id, publication_seq DESC
+            """
+        ).fetchall()
+        entries: list[dict[str, Any]] = []
+        for publication in publications:
+            result = (
+                conn.execute(
+                    """
+                    SELECT score FROM canonical_results
+                    WHERE checkpoint_content_ref = %s AND contract_content_ref = %s
+                    """,
+                    (publication["checkpoint_content_ref"], active["contract_content_ref"]),
+                ).fetchone()
+                if active is not None
+                else None
+            )
+            if result is None:
+                entries.append(
+                    {
+                        "candidate_id": publication["candidate_id"],
+                        "publication_id": publication["publication_id"],
+                        "checkpoint_content_ref": publication["checkpoint_content_ref"],
+                        "contract_content_ref": (
+                            active["contract_content_ref"] if active else None
+                        ),
+                        "status": "pending",
+                        "score": None,
+                    }
+                )
+            else:
+                entries.append(
+                    {
+                        "candidate_id": publication["candidate_id"],
+                        "publication_id": publication["publication_id"],
+                        "checkpoint_content_ref": publication["checkpoint_content_ref"],
+                        "contract_content_ref": active["contract_content_ref"],
+                        "status": "complete",
+                        "score": int(result["score"]),
+                    }
+                )
+    return {
+        "contract_content_ref": active["contract_content_ref"] if active else None,
+        "entries": entries,
+    }
+
+
+def inspect(candidate_id: str | None = None) -> dict[str, Any]:
+    where = " WHERE candidate_id = %s" if candidate_id else ""
+    params = (candidate_id,) if candidate_id else ()
+    with connection() as conn:
+        publications = conn.execute(
+            "SELECT * FROM publications" + where + " ORDER BY publication_seq", params
+        ).fetchall()
+        jobs = conn.execute(
+            "SELECT * FROM jobs" + where + " ORDER BY job_seq", params
+        ).fetchall()
+        activations = conn.execute(
+            "SELECT * FROM contract_activations ORDER BY activation_seq"
+        ).fetchall()
+        seed_results = conn.execute(
+            """
+            SELECT checkpoint_content_ref, contract_content_ref, seed, score, source_job_id
+            FROM seed_results
+            ORDER BY checkpoint_content_ref, contract_content_ref, seed
+            """
+        ).fetchall()
+        results = conn.execute(
+            """
+            SELECT checkpoint_content_ref, contract_content_ref, score, seed_count,
+                   completed_by_job_id, completed_seq
+            FROM canonical_results
+            ORDER BY completed_seq
+            """
+        ).fetchall()
+    return {
+        "publications": publications,
+        "activations": activations,
+        "jobs": jobs,
+        "seed_results": seed_results,
+        "results": results,
+    }
+
+
+def metrics() -> dict[str, int]:
+    with connection() as conn:
+        names = {
+            "evaluator_invocations": "evaluator_calls",
+            "publication_count": "publications",
+            "job_count": "jobs",
+            "seed_result_count": "seed_results",
+            "result_count": "canonical_results",
+        }
+        result: dict[str, int] = {}
+        for key, table in names.items():
+            row = conn.execute(f"SELECT count(*) AS value FROM {table}").fetchone()
+            assert row is not None
+            result[key] = int(row["value"])
+        return result

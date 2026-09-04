@@ -1,0 +1,59 @@
+name: Grading Summary
+
+# Renders a sticky PR comment from the committed submission/grading/ files
+# (pass rate, oracle/nop, rubric review, trial analysis). Pure formatting — no
+# model calls, no secrets. Re-runs on each push that touches submission/ and
+# updates the same comment in place.
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+    paths:
+      - "submission/**"
+
+concurrency:
+  group: grading-summary-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  grading-summary:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+      contents: read
+    steps:
+      # Trusted renderer from the base branch (never the PR's version).
+      - uses: actions/checkout@v4
+        with:
+          path: base
+
+      # The PR's submission/ data (read as data, not executed).
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          path: pr
+          sparse-checkout: submission
+          sparse-checkout-cone-mode: true
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Render grading comment
+        id: render
+        run: |
+          if [ -d pr/submission/grading ]; then
+            python3 base/.github/scripts/render-grading-comment.py pr/submission/grading > comment.md
+            echo "has=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "No submission/grading/ in this PR — skipping."
+            echo "has=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Post or update the sticky comment
+        if: steps.render.outputs.has == 'true'
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          header: grading-summary
+          number: ${{ github.event.pull_request.number }}
+          path: comment.md

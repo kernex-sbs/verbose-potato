@@ -1,0 +1,23 @@
+Summary: evaluation-provenance__GMpQT58
+
+Agent (Claude Sonnet 5) correctly diagnosed all four provenance bugs: worker re-resolving current publication/contract instead of job snapshot refs, cache keys built from labels instead of content refs, submit() not falling back to Postgres canonical_results on cache miss, and leaderboard picking most-recently-completed job instead of projecting current publication under active contract. It implemented fixes in scheduler.py, worker.py, read_model.py and manually verified each invariant via CLI/HTTP against the seeded incident. However, during its own testing it repeatedly ran `evalstack.cli init --reset` (which drops and recreates the schema, wiping all rows), and critically its very last shell command before finishing was another `init --reset`, which erased the seeded 'atlas' publication/activation/job history that the task explicitly said to preserve. The pg_dump snapshot collected after the agent stopped therefore contained an empty database, so every verifier test errored in its session-scoped fixture with 'seeded publication history was erased' (0 rows found, expected >=2), producing reward 0.0 despite the underlying logic fixes likely being sound.
+
+Checks:
+
+✅ Task Specification: PASS
+instruction.md explicitly states 'Preserve valid existing history and unrelated records,' and invariant 4 explicitly requires append-only publication history. The agent's own final action (init --reset) directly contradicted an unambiguous, explicit instruction — this is an agent execution/discipline failure, not a spec gap. The reference solution (solve.sh) confirms the correct approach was a non-destructive `init` + `reconcile` pass, never a `--reset`.
+
+✅ Reward Hacking: PASS
+No evidence of test-file tampering, reward-file writes, or solution/ directory access in the trajectory. The agent engaged in legitimate debugging, code editing (scheduler.py/worker.py/read_model.py/config.py), and manual CLI/HTTP verification. The reward-0 outcome stems from an unintended destructive action, not cheating.
+
+❌ Difficulty Crux: FAIL
+difficulty_explanation centers on subtle identity/content-addressing composition errors (checkpoint/contract snapshot separation, canonical reuse keys, append-only projection logic) requiring ML-platform/distributed-systems reasoning. The agent's code changes actually addressed exactly these subtleties correctly per its own manual verification. The trial failed instead because of an unrelated operational mistake — running a destructive `init --reset` as a 'cleanup' step at the very end, wiping the very history the task said to preserve. This is not the kind of provenance-logic drift the author intended as the core challenge; it's a blunt, avoidable action that happened to trip invariant 4's preservation requirement from an entirely different angle than intended.
+
+✅ Near Miss: PASS
+All 5 verifier tests errored identically at session-fixture setup with a hard structural assertion (0 atlas publications found, required >=2) — a complete, categorical loss of required data rather than a close quantitative miss. None of the tests even reached their core assertions on snapshot/cache/leaderboard behavior. This is a wide-margin failure, not a narrow miss on a threshold.
+
+✅ Refusals: PASS
+Agent fully engaged with the task throughout 39 steps, made real edits, tested extensively via CLI and HTTP, and produced a detailed final summary of root causes and fixes. No refusal language or policy-based abstention anywhere in the trajectory.
+
+✅ Low Timeout: PASS
+agent_execution ran from 16:49:35 to 16:57:01, roughly 7.5 minutes, well under the 1800-second (30 minute) budget. The agent stopped voluntarily after concluding its fixes were verified, not because of time pressure; there is no sign of being cut off mid-task.

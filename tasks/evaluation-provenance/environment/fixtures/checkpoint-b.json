@@ -1,0 +1,6 @@
+{
+  "format": "tabular-policy-v1",
+  "run_id": "atlas-training",
+  "checkpoint_name": "candidate",
+  "actions": {"s0": 0, "s1": 2, "s2": 1, "s3": 1}
+}

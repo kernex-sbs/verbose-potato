@@ -1,0 +1,6 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+reviews:
+  # Keep CodeRabbit advisory: it should leave comments/reviews, but not submit
+  # formal APPROVED / REQUEST_CHANGES states that can satisfy or block
+  # a repository's required-approval gate.
+  request_changes_workflow: false

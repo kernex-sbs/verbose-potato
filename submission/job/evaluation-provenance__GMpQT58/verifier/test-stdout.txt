@@ -1,0 +1,205 @@
+============================= test session starts ==============================
+platform linux -- Python 3.13.14, pytest-8.3.4, pluggy-1.6.0
+rootdir: /tests
+collected 5 items
+
+../tests/test_state.py EEEEE                                             [100%]
+
+==================================== ERRORS ====================================
+__ ERROR at setup of test_acceptance_snapshots_exact_checkpoint_and_contract ___
+
+    @pytest.fixture(scope="session", autouse=True)
+    def fresh_verifier_state() -> None:
+        """Prove isolation, then replay and validate the inherited live database."""
+        with psycopg.connect(DATABASE_URL) as conn:
+            rows = conn.execute(
+                """
+                SELECT tablename FROM pg_tables
+                WHERE schemaname = 'public'
+                """
+            ).fetchall()
+        assert rows == [], "verifier Postgres was not fresh"
+        assert redis.Redis.from_url(REDIS_URL).dbsize() == 0, "verifier Redis was not fresh"
+    
+        dump_path = Path("/tmp/evalstack-live.sql")
+        assert dump_path.is_file() and dump_path.stat().st_size > 0, (
+            "agent-side Postgres snapshot was not collected"
+        )
+        assert cli("init") == {"ok": True}
+        dump_sql = "\n".join(
+            line
+            for line in dump_path.read_text(encoding="utf-8").splitlines()
+            if not line.startswith("\\")
+        )
+        with psycopg.connect(DATABASE_URL) as conn:
+            conn.execute(dump_sql)
+    
+        inherited = cli("inspect")
+        atlas_publications = [
+            row for row in inherited["publications"] if row["candidate_id"] == "atlas"
+        ]
+>       assert len(atlas_publications) >= 2, "seeded publication history was erased"
+E       AssertionError: seeded publication history was erased
+E       assert 0 >= 2
+E        +  where 0 = len([])
+
+/tests/test_state.py:101: AssertionError
+___ ERROR at setup of test_identity_algebra_reuse_separation_and_cache_loss ____
+
+    @pytest.fixture(scope="session", autouse=True)
+    def fresh_verifier_state() -> None:
+        """Prove isolation, then replay and validate the inherited live database."""
+        with psycopg.connect(DATABASE_URL) as conn:
+            rows = conn.execute(
+                """
+                SELECT tablename FROM pg_tables
+                WHERE schemaname = 'public'
+                """
+            ).fetchall()
+        assert rows == [], "verifier Postgres was not fresh"
+        assert redis.Redis.from_url(REDIS_URL).dbsize() == 0, "verifier Redis was not fresh"
+    
+        dump_path = Path("/tmp/evalstack-live.sql")
+        assert dump_path.is_file() and dump_path.stat().st_size > 0, (
+            "agent-side Postgres snapshot was not collected"
+        )
+        assert cli("init") == {"ok": True}
+        dump_sql = "\n".join(
+            line
+            for line in dump_path.read_text(encoding="utf-8").splitlines()
+            if not line.startswith("\\")
+        )
+        with psycopg.connect(DATABASE_URL) as conn:
+            conn.execute(dump_sql)
+    
+        inherited = cli("inspect")
+        atlas_publications = [
+            row for row in inherited["publications"] if row["candidate_id"] == "atlas"
+        ]
+>       assert len(atlas_publications) >= 2, "seeded publication history was erased"
+E       AssertionError: seeded publication history was erased
+E       assert 0 >= 2
+E        +  where 0 = len([])
+
+/tests/test_state.py:101: AssertionError
+_ ERROR at setup of test_seed_fanout_and_duplicate_delivery_keep_one_snapshot __
+
+    @pytest.fixture(scope="session", autouse=True)
+    def fresh_verifier_state() -> None:
+        """Prove isolation, then replay and validate the inherited live database."""
+        with psycopg.connect(DATABASE_URL) as conn:
+            rows = conn.execute(
+                """
+                SELECT tablename FROM pg_tables
+                WHERE schemaname = 'public'
+                """
+            ).fetchall()
+        assert rows == [], "verifier Postgres was not fresh"
+        assert redis.Redis.from_url(REDIS_URL).dbsize() == 0, "verifier Redis was not fresh"
+    
+        dump_path = Path("/tmp/evalstack-live.sql")
+        assert dump_path.is_file() and dump_path.stat().st_size > 0, (
+            "agent-side Postgres snapshot was not collected"
+        )
+        assert cli("init") == {"ok": True}
+        dump_sql = "\n".join(
+            line
+            for line in dump_path.read_text(encoding="utf-8").splitlines()
+            if not line.startswith("\\")
+        )
+        with psycopg.connect(DATABASE_URL) as conn:
+            conn.execute(dump_sql)
+    
+        inherited = cli("inspect")
+        atlas_publications = [
+            row for row in inherited["publications"] if row["candidate_id"] == "atlas"
+        ]
+>       assert len(atlas_publications) >= 2, "seeded publication history was erased"
+E       AssertionError: seeded publication history was erased
+E       assert 0 >= 2
+E        +  where 0 = len([])
+
+/tests/test_state.py:101: AssertionError
+_ ERROR at setup of test_completion_order_history_and_restoration_are_independent _
+
+    @pytest.fixture(scope="session", autouse=True)
+    def fresh_verifier_state() -> None:
+        """Prove isolation, then replay and validate the inherited live database."""
+        with psycopg.connect(DATABASE_URL) as conn:
+            rows = conn.execute(
+                """
+                SELECT tablename FROM pg_tables
+                WHERE schemaname = 'public'
+                """
+            ).fetchall()
+        assert rows == [], "verifier Postgres was not fresh"
+        assert redis.Redis.from_url(REDIS_URL).dbsize() == 0, "verifier Redis was not fresh"
+    
+        dump_path = Path("/tmp/evalstack-live.sql")
+        assert dump_path.is_file() and dump_path.stat().st_size > 0, (
+            "agent-side Postgres snapshot was not collected"
+        )
+        assert cli("init") == {"ok": True}
+        dump_sql = "\n".join(
+            line
+            for line in dump_path.read_text(encoding="utf-8").splitlines()
+            if not line.startswith("\\")
+        )
+        with psycopg.connect(DATABASE_URL) as conn:
+            conn.execute(dump_sql)
+    
+        inherited = cli("inspect")
+        atlas_publications = [
+            row for row in inherited["publications"] if row["candidate_id"] == "atlas"
+        ]
+>       assert len(atlas_publications) >= 2, "seeded publication history was erased"
+E       AssertionError: seeded publication history was erased
+E       assert 0 >= 2
+E        +  where 0 = len([])
+
+/tests/test_state.py:101: AssertionError
+_________ ERROR at setup of test_http_contract_projects_the_same_state _________
+
+    @pytest.fixture(scope="session", autouse=True)
+    def fresh_verifier_state() -> None:
+        """Prove isolation, then replay and validate the inherited live database."""
+        with psycopg.connect(DATABASE_URL) as conn:
+            rows = conn.execute(
+                """
+                SELECT tablename FROM pg_tables
+                WHERE schemaname = 'public'
+                """
+            ).fetchall()
+        assert rows == [], "verifier Postgres was not fresh"
+        assert redis.Redis.from_url(REDIS_URL).dbsize() == 0, "verifier Redis was not fresh"
+    
+        dump_path = Path("/tmp/evalstack-live.sql")
+        assert dump_path.is_file() and dump_path.stat().st_size > 0, (
+            "agent-side Postgres snapshot was not collected"
+        )
+        assert cli("init") == {"ok": True}
+        dump_sql = "\n".join(
+            line
+            for line in dump_path.read_text(encoding="utf-8").splitlines()
+            if not line.startswith("\\")
+        )
+        with psycopg.connect(DATABASE_URL) as conn:
+            conn.execute(dump_sql)
+    
+        inherited = cli("inspect")
+        atlas_publications = [
+            row for row in inherited["publications"] if row["candidate_id"] == "atlas"
+        ]
+>       assert len(atlas_publications) >= 2, "seeded publication history was erased"
+E       AssertionError: seeded publication history was erased
+E       assert 0 >= 2
+E        +  where 0 = len([])
+
+/tests/test_state.py:101: AssertionError
+=========================== short test summary info ============================
+ERROR ../tests/test_state.py::test_acceptance_snapshots_exact_checkpoint_and_contract
+ERROR ../tests/test_state.py::test_identity_algebra_reuse_separation_and_cache_loss
+ERROR ../tests/test_state.py::test_seed_fanout_and_duplicate_delivery_keep_one_snapshot
+ERROR ../tests/test_state.py::test_completion_order_history_and_restoration_are_independent
+ERROR ../tests/test_state.py::test_http_contract_projects_the_same_state - As...
+============================== 5 errors in 1.45s ===============================

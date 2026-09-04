@@ -1,0 +1,124 @@
+{
+  "checks": {
+    "verifiable": {
+      "explanation": "Verification is fully deterministic and programmatic: pytest assertions against exact JSON outputs, DB row content, and independently-derived expected scores (reference_scorer.total_score). No LLM-as-judge or subjective grading is used. I confirmed empirically via `harbor run -a oracle` (reward 1.0) and `harbor run -a nop` (reward 0.0) that the verifier reliably discriminates pass/fail.",
+      "outcome": "pass"
+    },
+    "solvable": {
+      "explanation": "A working reference solution exists (solution/evalstack/*.py + solve.sh) and I confirmed via `harbor run -p tasks/evaluation-provenance -a oracle` that it achieves reward 1.0. The fix scope (4 files, targeted logic changes to identity/snapshot handling) is implementable by an expert with ML-infra/distributed-systems background in a few hours, matching the stated 3.5-hour expert time estimate.",
+      "outcome": "pass"
+    },
+    "difficult": {
+      "explanation": "The task requires diagnosing and fixing multiple interacting provenance bugs (label-vs-content-hash cache keys, delivery-time re-resolution of publication/contract instead of using the accepted snapshot, leaderboard joins against resolved refs) spread across scheduler.py, worker.py, and read_model.py. This demands genuine distributed-systems and ML-evaluation-infrastructure reasoning, not obscure trivia or tedious volume of low-skill work.",
+      "outcome": "pass"
+    },
+    "interesting": {
+      "explanation": "Reproducing evaluation results reliably across retries, caching, and republished checkpoints/contracts is a genuine real-world concern for ML evaluation/benchmarking infrastructure teams (the kind of incident an MLOps or eval-infra engineer would be paged for). It is not a contrived puzzle; the difficulty_explanation names the professional audience explicitly.",
+      "outcome": "pass"
+    },
+    "outcome_verified": {
+      "explanation": "Tests only check external CLI/HTTP behavior and persisted DB/cache state (via `evalctl inspect/leaderboard/metrics` and HTTP endpoints), never inspecting the agent's source code or dictating implementation approach. The instruction states outcomes (four invariants) to achieve, not a specific algorithm or code structure, and the 'no Temporal.io/Trigger.dev' constraint is a legitimate scope-limiting rule (preventing the agent from sidestepping the actual repair with an off-the-shelf workflow engine) rather than mandating a specific approach to the repair itself.",
+      "outcome": "pass"
+    },
+    "anti_cheat_robustness": {
+      "explanation": "The hidden test fixtures (tests/fixtures.py) use different checkpoint/contract content (run_id 'hidden-training-run', suite 'hidden-policy-quality') than the environment's seeded fixtures (run_id 'atlas-training', suite 'policy-quality'), so hardcoding against visible data doesn't help. The verifier runs in a separate container the agent never sees, and reference_scorer.py/reference_model.py are only in tests/ (inaccessible to the agent at solve time). Content-ref hashes are derived deterministically via SHA-256 canonical JSON, so the agent cannot forge identities without correctly implementing the content model.",
+      "outcome": "pass"
+    },
+    "task_security": {
+      "explanation": "Reviewed all scripts (Dockerfiles, entrypoint.sh, test.sh, solve.sh, cli.py, api.py, worker.py, etc.). No credential exfiltration, no external network calls beyond the internal docker-compose services, no obfuscated code, no destructive filesystem operations, no prompt injection. The only 'network' collect step (`pg_dump`) runs against the task's own internal postgres sidecar.",
+      "outcome": "pass"
+    },
+    "functional_verification": {
+      "explanation": "tests/test_state.py executes real CLI/HTTP behavior (subprocess calls to evalctl, live HTTP requests to the running API) and asserts on JSON outputs, DB-visible inspect/metrics state, and independently computed expected scores (reference_scorer.total_score) \u2014 never string-matches source code. I additionally ran `harbor run -a oracle` (reward 1.0) and `harbor run -a nop` (reward 0.0) confirming the verifier actually discriminates a correct solution from a no-op.",
+      "outcome": "pass"
+    },
+    "deterministic_reproducible": {
+      "explanation": "All dependencies pinned (psycopg==3.2.3, redis==5.2.1, pytest==8.3.4 in tests), base images pinned to specific tags (python:3.13.14-slim-bookworm, postgres:16.4-bookworm, redis:7.4.1-bookworm) and identical across environment/ and tests/. No live external services; verifier network is `internal: true`. apt packages (curl, jq, postgresql-client, redis-tools) are correctly left unpinned per apt convention.",
+      "outcome": "pass"
+    },
+    "essential_difficulty": {
+      "explanation": "The bugs are substantive: caching/reuse keyed by mutable labels instead of content hashes, worker re-resolving 'current' publication/contract at delivery time instead of using the job's accepted snapshot, and leaderboard joining on resolved (post-hoc) refs rather than the current publication/contract pairing. Fixing these requires real distributed-systems/provenance reasoning, not output-formatting or precision tuning. Verified failures would stem from incorrect identity/snapshot semantics, not clerical formatting.",
+      "outcome": "pass"
+    },
+    "test_instruction_alignment": {
+      "explanation": "Each of the instruction's 4 invariants maps to a test: acceptance-snapshot immutability -> test_acceptance_snapshots_exact_checkpoint_and_contract; canonical reuse/duplicate-safety -> test_identity_algebra_reuse_separation_and_cache_loss and test_seed_fanout_and_duplicate_delivery_keep_one_snapshot; Postgres durability over Redis cache loss -> covered within those same tests (clear-result-cache calls); append-only publication history / current leaderboard projection -> test_completion_order_history_and_restoration_are_independent. test_http_contract_projects_the_same_state covers the 'keep documented CLI and HTTP contracts unchanged' requirement. No test introduces requirements outside the instruction's scope.",
+      "outcome": "pass"
+    },
+    "novel": {
+      "explanation": "This is a custom, purpose-built evaluation-platform codebase (checkpoint/contract content model, seed fanout, Redis queue + Postgres durable store) rather than a known textbook problem. The specific bug combination (label-keyed caching, late-binding resolution, join-based leaderboard) is a bespoke provenance-drift scenario unlikely to appear verbatim in training corpora.",
+      "outcome": "pass"
+    },
+    "agentic": {
+      "explanation": "Solving requires exploring multiple files (scheduler.py, worker.py, read_model.py, db.py, schema.sql), running the CLI/HTTP interfaces to observe the incident (`seed.py`'s reproducible bad state), iterating on fixes across several interacting modules, and validating via multi-step CLI invocations (publish/activate/submit/process-one/leaderboard/inspect). This cannot be done zero-shot; it requires reading and tracing distributed state across Postgres and Redis and iteratively testing behavior.",
+      "outcome": "pass"
+    },
+    "reviewable": {
+      "explanation": "SPEC.md documents exact JSON schemas and scoring rules, letting a non-specialist trace expected behavior. Expected scores in tests are computed via reference_scorer.total_score from fixture contents rather than hardcoded, so a reviewer can independently verify correctness without domain expertise. task.toml's difficulty/solution/verification explanations describe the approach concretely enough to review consistency against the actual solution files, which I confirmed by diffing environment/ vs solution/ implementations.",
+      "outcome": "pass"
+    },
+    "instruction_concision": {
+      "explanation": "instruction.md is concise (14 lines), uses absolute paths (/app/evalstack, /app/SPEC.md), states the four invariants as outcomes to achieve rather than prescribing implementation steps (no mention of specific tables, functions, or code changes), and doesn't hint at the solution's identity-hashing approach. It does not enumerate tool/library lists beyond what's needed to know the spec location.",
+      "outcome": "pass"
+    },
+    "solution_quality": {
+      "explanation": "solve.sh copies in 4 pre-written solution files then runs `evalctl init` and a `reconcile` script that drains the queue under repaired semantics \u2014 it doesn't merely echo/cat a final answer, it performs genuine computation (re-running process_one to reconcile legacy queued deliveries). Large files (scheduler.py, worker.py, read_model.py, reconcile.py) are kept as separate files under solution/evalstack/ rather than inlined as heredocs in solve.sh, consistent with the size guidance.",
+      "outcome": "pass"
+    },
+    "separate_verifier_configured": {
+      "explanation": "Verifier inputs are fully covered: /app/evalstack is a declared artifact, plus a sidecar-collected Postgres dump (/tmp/evalstack-live.sql via [[verifier.collect]] using pg_dump on the postgres service) \u2014 both declared in top-level `artifacts`. tests/Dockerfile pre-installs psycopg/redis/pytest at build time (no runtime pip/apt installs in test.sh). Postgres/Redis image tags and client library versions are byte-identical between environment/ and tests/ (postgres:16.4-bookworm, redis:7.4.1-bookworm, psycopg==3.2.3, redis==5.2.1), with no undocumented drift.",
+      "outcome": "pass"
+    },
+    "environment_hygiene": {
+      "explanation": "environment/Dockerfile only COPYs SPEC.md, fixtures/, evalstack/, and entrypoint.sh \u2014 no tests/ or solution/ content. Test-only dependency (pytest) appears only in tests/requirements.txt, not environment/requirements.txt. apt-get update precedes install and is followed by `rm -rf /var/lib/apt/lists/*`; apt packages (curl, jq, postgresql-client, redis-tools) are correctly left unpinned.",
+      "outcome": "pass"
+    },
+    "structured_data_schema": {
+      "explanation": "SPEC.md documents exact JSON schemas for checkpoint and evaluation-contract documents, all CLI command outputs, and the HTTP API request/response bodies (including the leaderboard entry schema), referenced explicitly from instruction.md as the source of truth.",
+      "outcome": "pass"
+    },
+    "typos": {
+      "explanation": "Reviewed all filenames, commands, path references, and identifiers across instruction.md, task.toml, Dockerfiles, scripts, and Python source; found no typos in critical identifiers. A grep for common typo patterns (sucess, recieve, seperate, occured, thier, teh, adress) returned no matches.",
+      "outcome": "pass"
+    },
+    "difficulty_explanation_quality": {
+      "explanation": "The explanation identifies the specific reasoning challenge (separating immutable content, accepted-work snapshots, append-only history, canonical reuse, and leaderboard projection across Postgres/Redis) and explains why it's hard (locally reasonable identity choices compose into silent provenance drift). It states the data is synthetic but models realistic ML-infra concerns, and names the real-world practitioner (ML platform / evaluation-infrastructure engineer performing incident repair). It avoids mentioning pass rates or benchmark results.",
+      "outcome": "pass"
+    },
+    "solution_explanation_quality": {
+      "explanation": "The explanation describes the high-level strategy (derive stable identities from canonical content, snapshot both identities at acceptance, propagate through seed execution/aggregation, Postgres as durable authority vs. disposable Redis cache, append-only publications, leaderboard joins on current state) without step-by-step code narration. This is congruent with the actual diffs I reviewed between environment/ and solution/ implementations (content-ref-keyed caching, job-snapshot-based worker resolution, join-based leaderboard).",
+      "outcome": "pass"
+    },
+    "verification_explanation_quality": {
+      "explanation": "The explanation concretely describes the verifier's mechanism (stop agent service, pg_dump snapshot via sidecar, replay into fresh Postgres, prove history survival, run source against fresh services, exercise specific scenarios: alias changes, duplicate delivery, exact-provenance reuse, metadata-only separation, cache loss, out-of-order completion, A-B-A history, mid-fanout contract activation) and states expected scores are independently derived from fixture contents rather than hardcoded. This matches what I found in test_state.py and reference_scorer.py. No unexplained tolerance/threshold values are used (checks are exact-match).",
+      "outcome": "pass"
+    },
+    "category_and_tags": {
+      "explanation": "category = \"ml-infrastructure\" accurately reflects the domain (evaluation platform provenance). Tags [\"debugging\", \"distributed-systems\", \"ml-evaluation\", \"provenance\", \"postgres\", \"redis\"] are specific and relevant to the skills/technologies actually involved, not generic filler.",
+      "outcome": "pass"
+    },
+    "task_name": {
+      "explanation": "The task directory 'evaluation-provenance' is a concise, descriptive, lowercase-kebab-case 2-word slug that accurately conveys the core subject (repairing provenance in an evaluation system) without being generic or misleading.",
+      "outcome": "pass"
+    },
+    "resource_configuration": {
+      "explanation": "Verifier timeout (600s) comfortably covers the observed ~1m49s full oracle run including test suite. Agent timeout (1800s) is a deliberate, non-default value sized for a repair task rated at 3.5 expert-hours. Environment resources (cpus=2, memory_mb=4096) are increased from the 1/2048 defaults, justified by concurrently running Postgres, Redis, and the app service \u2014 not used to inflate difficulty via brute compute. Verifier environment mirrors the same modest resource bump for symmetry.",
+      "outcome": "pass"
+    },
+    "task_readme": {
+      "explanation": "README.md provides development-context information not passed to the agent (durability scope summary, environment layout diagram, exact qa.sh/harbor run commands for reviewers, expected oracle/nop rewards) without duplicating instruction.md's agent-facing prompt content.",
+      "outcome": "pass"
+    },
+    "expert_time_estimate": {
+      "explanation": "expert_time_estimate_hours = 3.5, non-zero and plausible for a multi-file distributed-systems provenance repair requiring careful tracing of Postgres/Redis interactions, consistent with the stated difficulty_explanation and the 1800s (30 min) agent timeout being a fraction of that for a faster agent workflow.",
+      "outcome": "pass"
+    },
+    "task_toml_schema": {
+      "explanation": "Checked every field against the Harbor VerifierConfig/EnvironmentConfig/MetadataConfig schema in the installed harbor package (harbor==0.22.0). All fields used (schema_version, artifacts, [metadata].*, [verifier].environment_mode/timeout_sec, [[verifier.collect]] with command/service/timeout_sec, [verifier.environment].*, [agent].timeout_sec, [environment].*) are valid recognized fields; no invented fields are present.",
+      "outcome": "pass"
+    },
+    "no_extraneous_files": {
+      "explanation": "Every file in the tree is referenced: Dockerfiles COPY the fixtures/evalstack/SPEC.md/entrypoint.sh files they need; solve.sh copies the 4 solution/evalstack/*.py files and none are unused; tests/ files are all imported by test_state.py (fixtures.py, reference_model.py, reference_scorer.py) or are scaffold (Dockerfile, docker-compose.yaml, test.sh, requirements.txt). No editor cruft, backups, or unused assets found.",
+      "outcome": "pass"
+    }
+  }
+}

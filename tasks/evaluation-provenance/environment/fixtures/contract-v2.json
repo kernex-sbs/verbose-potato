@@ -1,0 +1,11 @@
+{
+  "format": "evaluation-contract-v1",
+  "suite_name": "policy-quality",
+  "dataset_revision": "dataset-2026-06",
+  "evaluator_revision": "policy-match-v1",
+  "aggregation": "sum",
+  "seeds": [
+    {"seed": 17, "cases": [{"observation": "s0", "expected_action": 0, "reward": 4}, {"observation": "s1", "expected_action": 2, "reward": 3}]},
+    {"seed": 41, "cases": [{"observation": "s2", "expected_action": 1, "reward": 6}, {"observation": "s3", "expected_action": 1, "reward": 2}]}
+  ]
+}
